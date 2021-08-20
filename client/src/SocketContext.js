@@ -13,8 +13,13 @@ const ContextProvider = ({ children }) => {
   const [stream, setStream] = useState(null);
   const [me, setMe] = useState('');
   const [call, setCall] = useState({});
+  const [callAccepted, setCallAccepted] = useState(false);
+  const [callEnded, setCallEnded] = useState(false);
+  const [name, setName] = useState('');
 
   const myVideo = useRef();
+  const userVideo = useRef();
+  const connectionRef = useRef();
 
   useEffect(() => {
     // use the navigator to use the webcam and the microphone
@@ -38,9 +43,71 @@ const ContextProvider = ({ children }) => {
   }, []);
 
   // create all the functions for the video calls
-  const answerCall = () => {};
+  const answerCall = () => {
+    setCallAccepted(true);
 
-  const callUSer = () => {};
+    const peer = new Peer({ initiator: false, trickle: false, stream });
 
-  const leaveCall = () => {};
+    peer.on('signal', (data) => {
+      socket.emit('answercall', { signal: data, to: call.from });
+    });
+
+    peer.on('stream', (currentStream) => {
+      userVideo.current.srcObject = currentStream;
+    });
+
+    peer.signal(call.signal);
+
+    connectionRef.current = peer;
+  };
+
+  const callUSer = (id) => {
+    const peer = new Peer({ initiator: true, trickle: false, stream });
+
+    peer.on('signal', (data) => {
+      socket.emit('calluser', { userToCall: id, signal: data, from: me, name });
+    });
+
+    peer.on('stream', (currentStream) => {
+      userVideo.current.srcObject = currentStream;
+    });
+
+    socket.on('callaccepted', (signal) => {
+      setCallAccepted(true);
+
+      peer.signal = signal;
+
+      connectionRef.current = peer;
+    });
+  };
+
+  const leaveCall = () => {
+    setCallEnded(true);
+    connectionRef.current.destroy();
+
+    window.location.reload();
+  };
+
+  return (
+    <SocketContext.Provider
+      value={{
+        callAccepted,
+        call,
+        myVideo,
+        userVideo,
+        stream,
+        name,
+        setName,
+        callEnded,
+        me,
+        callUSer,
+        leaveCall,
+        answerCall,
+      }}
+    >
+      {children}
+    </SocketContext.Provider>
+  );
 };
+
+export { SocketContext, ContextProvider };
